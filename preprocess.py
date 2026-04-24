@@ -22,6 +22,7 @@ def main():
     df= clean_data(df)
     print("After cleaning:", df.shape)
     print(df.head())
+    df.to_csv("data/cleaned_data.csv", index=False)
 
 if __name__ == "__main__":
     main()
