@@ -5,13 +5,17 @@ df = pd.read_csv("data/cleaned_data.csv")
 
 print("Dataset shape:", df.shape)
 
+
 def clean_text(text):
-    text = text.lower()
+    text = str(text).lower()
     text = re.sub(r"http\S+", "", text)
     text = re.sub(r"[^a-z\s]", "", text)
     return text
 
 df["text"] = df["text"].apply(clean_text)
+
+df = df[df["text"].str.strip() != ""]
+
 
 emotion_map = {
     # HAPPY
@@ -40,16 +44,18 @@ df["label_5"] = df["label"].map(emotion_map)
 
 df = df.dropna(subset=["label_5"])
 
-print("\n5-class distribution BEFORE balancing:")
+print("\nDistribution BEFORE balancing:")
 print(df["label_5"].value_counts())
+
 
 neutral_df = df[df["label_5"] == "neutral"].sample(20000, random_state=42)
 other_df = df[df["label_5"] != "neutral"]
 
 df = pd.concat([neutral_df, other_df])
 
-print("\n5-class distribution AFTER balancing:")
+print("\nDistribution AFTER balancing:")
 print(df["label_5"].value_counts())
+
 
 from sklearn.model_selection import train_test_split
 
@@ -60,6 +66,7 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, stratify=y, random_state=42
 )
 
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 vectorizer = TfidfVectorizer(
@@ -67,58 +74,53 @@ vectorizer = TfidfVectorizer(
     stop_words="english",
     ngram_range=(1, 2),
     min_df=5,
-    max_df=0.85
+    max_df=0.9
 )
 
 X_train_vec = vectorizer.fit_transform(X_train)
 X_test_vec = vectorizer.transform(X_test)
 
-from sklearn.svm import LinearSVC
 
-model = LinearSVC(class_weight="balanced")
+from sklearn.linear_model import LogisticRegression
+
+model = LogisticRegression(max_iter=300, class_weight="balanced")
 model.fit(X_train_vec, y_train)
 
-print("\nModel training complete!")
+print("\nModel trained!")
+
 
 from sklearn.metrics import accuracy_score, classification_report
 
 y_pred = model.predict(X_test_vec)
 
-print("\n=== 5-CLASS EVALUATION ===")
+print("\n=== GOEMOTIONS MODEL ===")
 print("Accuracy:", accuracy_score(y_test, y_pred))
 print(classification_report(y_test, y_pred))
 
-from sklearn.metrics import confusion_matrix
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-cm = confusion_matrix(y_test, y_pred)
+import joblib
 
-plt.figure(figsize=(6, 5))
-sns.heatmap(cm, annot=True, fmt='d',
-            xticklabels=sorted(y.unique()),
-            yticklabels=sorted(y.unique()))
-plt.title("Confusion Matrix (5-Class)")
-plt.xlabel("Predicted")
-plt.ylabel("Actual")
-plt.show()
+joblib.dump(model, "model_noisy.pkl")
+joblib.dump(vectorizer, "vectorizer_noisy.pkl")
+
+print("\nSaved model_noisy.pkl and vectorizer_noisy.pkl")
 
 
-def predict_emotion(text):
+def predict(text):
     text = clean_text(text)
     vec = vectorizer.transform([text])
-    pred = model.predict(vec)[0]
-
-    return {
-        "input": text,
-        "predicted_emotion": pred
-    }
+    return model.predict(vec)[0]
 
 
-print("\n=== SAMPLE PREDICTIONS ===")
+print("\n=== SAMPLE TEST ===")
+samples = [
+    "I feel amazing today",
+    "I am really stressed",
+    "This is so frustrating",
+    "I feel sad and empty",
+    "It was just a normal day",
+    "yeah great my life is amazing"
+]
 
-print(predict_emotion("I am so happy today"))
-print(predict_emotion("I feel really sad and tired"))
-print(predict_emotion("This is so frustrating"))
-print(predict_emotion("I am nervous about tomorrow"))
-print(predict_emotion("It was just an average day"))
+for s in samples:
+    print(f"{s} → {predict(s)}")

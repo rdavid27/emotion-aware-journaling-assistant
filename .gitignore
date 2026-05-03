@@ -1,1 +1,6 @@
 data
+Trained.txt
+__pycache__/
+*.pyc
+*.pkl
+*.csv
